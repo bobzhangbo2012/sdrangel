@@ -21,22 +21,22 @@
 #include <QDebug>
 
 #include "dsp/filerecord.h"
-#include "fileinputthread.h"
+#include "fileinputworker.h"
 #include "dsp/samplesinkfifo.h"
 #include "util/messagequeue.h"
 
-MESSAGE_CLASS_DEFINITION(FileInputThread::MsgReportEOF, Message)
+MESSAGE_CLASS_DEFINITION(FileInputWorker::MsgReportEOF, Message)
 
-FileInputThread::FileInputThread(std::ifstream *samplesStream,
+FileInputWorker::FileInputWorker(std::ifstream *samplesStream,
         SampleSinkFifo* sampleFifo,
         const QTimer& timer,
         MessageQueue *fileInputMessageQueue,
         QObject* parent) :
-	QThread(parent),
+	QObject(parent),
 	m_running(false),
 	m_ifstream(samplesStream),
-	m_fileBuf(0),
-	m_convertBuf(0),
+	m_fileBuf(nullptr),
+	m_convertBuf(nullptr),
 	m_bufsize(0),
 	m_chunksize(0),
 	m_sampleFifo(sampleFifo),
@@ -49,38 +49,34 @@ FileInputThread::FileInputThread(std::ifstream *samplesStream,
     m_throttlems(FILESOURCE_THROTTLE_MS),
     m_throttleToggle(false)
 {
-    assert(m_ifstream != 0);
+    assert(m_ifstream != nullptr);
 }
 
-FileInputThread::~FileInputThread()
+FileInputWorker::~FileInputWorker()
 {
 	if (m_running) {
 		stopWork();
 	}
 
-	if (m_fileBuf != 0) {
+	if (m_fileBuf) {
 		free(m_fileBuf);
 	}
 
-	if (m_convertBuf != 0) {
+	if (m_convertBuf) {
 		free(m_convertBuf);
 	}
 }
 
-void FileInputThread::startWork()
+void FileInputWorker::startWork()
 {
 	qDebug() << "FileInputThread::startWork: ";
 
     if (m_ifstream->is_open())
     {
         qDebug() << "FileInputThread::startWork: file stream open, starting...";
-        m_startWaitMutex.lock();
         m_elapsedTimer.start();
-        start();
-        while(!m_running)
-            m_startWaiter.wait(&m_startWaitMutex, 100);
-        m_startWaitMutex.unlock();
         connect(&m_timer, SIGNAL(timeout()), this, SLOT(tick()));
+		m_running = true;
     }
     else
     {
@@ -88,15 +84,14 @@ void FileInputThread::startWork()
     }
 }
 
-void FileInputThread::stopWork()
+void FileInputWorker::stopWork()
 {
 	qDebug() << "FileInputThread::stopWork";
 	disconnect(&m_timer, SIGNAL(timeout()), this, SLOT(tick()));
 	m_running = false;
-	wait();
 }
 
-void FileInputThread::setSampleRateAndSize(int samplerate, quint32 samplesize)
+void FileInputWorker::setSampleRateAndSize(int samplerate, quint32 samplesize)
 {
 	qDebug() << "FileInputThread::setSampleRateAndSize:"
 			<< " new rate:" << samplerate
@@ -121,14 +116,14 @@ void FileInputThread::setSampleRateAndSize(int samplerate, quint32 samplesize)
 	//m_samplerate = samplerate;
 }
 
-void FileInputThread::setBuffers(std::size_t chunksize)
+void FileInputWorker::setBuffers(std::size_t chunksize)
 {
     if (chunksize > m_bufsize)
     {
         m_bufsize = chunksize;
         int nbSamples = m_bufsize/(2 * m_samplebytes);
 
-        if (m_fileBuf == 0)
+        if (!m_fileBuf)
         {
             qDebug() << "FileInputThread::setBuffers: Allocate file buffer";
             m_fileBuf = (quint8*) malloc(m_bufsize);
@@ -138,10 +133,13 @@ void FileInputThread::setBuffers(std::size_t chunksize)
             qDebug() << "FileInputThread::setBuffers: Re-allocate file buffer";
             quint8 *buf = m_fileBuf;
             m_fileBuf = (quint8*) realloc((void*) m_fileBuf, m_bufsize);
-            if (!m_fileBuf) free(buf);
+
+            if (!m_fileBuf) {
+                free(buf);
+            }
         }
 
-        if (m_convertBuf == 0)
+        if (!m_convertBuf)
         {
             qDebug() << "FileInputThread::setBuffers: Allocate conversion buffer";
             m_convertBuf = (quint8*) malloc(nbSamples*sizeof(Sample));
@@ -151,7 +149,10 @@ void FileInputThread::setBuffers(std::size_t chunksize)
             qDebug() << "FileInputThread::setBuffers: Re-allocate conversion buffer";
             quint8 *buf = m_convertBuf;
             m_convertBuf = (quint8*) realloc((void*) m_convertBuf, nbSamples*sizeof(Sample));
-            if (!m_convertBuf) free(buf);
+
+            if (!m_convertBuf) {
+                free(buf);
+            }
         }
 
         qDebug() << "FileInputThread::setBuffers: size: " << m_bufsize
@@ -159,20 +160,7 @@ void FileInputThread::setBuffers(std::size_t chunksize)
     }
 }
 
-void FileInputThread::run()
-{
-	m_running = true;
-	m_startWaiter.wakeAll();
-
-	while(m_running) // actual work is in the tick() function
-	{
-		sleep(1);
-	}
-
-	m_running = false;
-}
-
-void FileInputThread::tick()
+void FileInputWorker::tick()
 {
 	if (m_running)
 	{
@@ -203,7 +191,7 @@ void FileInputThread::tick()
 	}
 }
 
-void FileInputThread::writeToSampleFifo(const quint8* buf, qint32 nbBytes)
+void FileInputWorker::writeToSampleFifo(const quint8* buf, qint32 nbBytes)
 {
 	if (m_samplesize == 16)
 	{

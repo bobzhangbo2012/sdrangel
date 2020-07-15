@@ -69,7 +69,7 @@ private:
     ATVDemod* m_atvDemod;
     ATVDemodSettings m_settings;
 
-    bool m_blnDoApplySettings;
+    bool m_doApplySettings;
 
     MovingAverageUtil<double, double, 4> m_objMagSqAverage;
     int m_intTickCount;
@@ -77,7 +77,6 @@ private:
     ScopeVis* m_scopeVis;
 
     float m_fltLineTimeMultiplier;
-    float m_fltTopTimeMultiplier;
     int m_rfSliderDivisor;
     int m_basebandSampleRate;
     int m_tvSampleRate;
@@ -86,7 +85,6 @@ private:
     explicit ATVDemodGUI(PluginAPI* objPluginAPI, DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel, QWidget* objParent = 0);
 	virtual ~ATVDemodGUI();
 
-    void blockApplySettings(bool blnBlock);
 	void applySettings(bool force = false);
     void displaySettings();
     void displayStreamIndex();
@@ -124,6 +122,8 @@ private slots:
     void on_deltaFrequency_changed(qint64 value);
     void on_bfo_valueChanged(int value);
     void on_fmDeviation_valueChanged(int value);
+    void on_amScaleFactor_valueChanged(int value);
+    void on_amScaleOffset_valueChanged(int value);
     void on_screenTabWidget_currentChanged(int index);
 };
 

@@ -109,7 +109,7 @@ void ATVDemodGUI::displaySettings()
     setWindowTitle(m_channelMarker.getTitle());
     displayStreamIndex();
 
-    blockApplySettings(true);
+    m_doApplySettings = false;
 
     //********** ATV values **********
     ui->synchLevel->setValue((int) (m_settings.m_levelSynchroTop * 1000.0f));
@@ -130,15 +130,21 @@ void ATVDemodGUI::displaySettings()
     topTimeUpdate();
 
     //********** RF values **********
+    ui->deltaFrequency->setValue(m_settings.m_inputFrequencyOffset);
     ui->decimatorEnable->setChecked(m_settings.m_forceDecimator);
     ui->rfFiltering->setChecked(m_settings.m_fftFiltering);
     ui->bfo->setValue(m_settings.m_bfoFrequency);
     ui->bfoText->setText(QString("%1").arg(m_settings.m_bfoFrequency * 1.0, 0, 'f', 0));
     ui->fmDeviation->setValue((int) (m_settings.m_fmDeviation * 1000.0f));
     ui->fmDeviationText->setText(QString("%1").arg(m_settings.m_fmDeviation * 100.0, 0, 'f', 1));
-    blockApplySettings(false);
+    ui->amScaleFactor->setValue(m_settings.m_amScalingFactor);
+    ui->amScaleFactorText->setText(QString("%1").arg(m_settings.m_amScalingFactor));
+    ui->amScaleOffset->setValue(m_settings.m_amOffsetFactor);
+    ui->amScaleOffsetText->setText(QString("%1").arg(m_settings.m_amOffsetFactor));
 
     applyTVSampleRate();
+
+    m_doApplySettings = true;
 }
 
 void ATVDemodGUI::displayStreamIndex()
@@ -164,7 +170,7 @@ void ATVDemodGUI::displayRFBandwidths()
 
 void ATVDemodGUI::applyTVSampleRate()
 {
-    blockApplySettings(true);
+    qDebug("TVDemodGUI::applyTVSampleRate");
     unsigned int nbPointsPerLine;
     ATVDemodSettings::getBaseValues(m_basebandSampleRate, m_settings.m_fps*m_settings.m_nbLines, m_tvSampleRate, nbPointsPerLine);
     ui->tvSampleRateText->setText(tr("%1k").arg(m_tvSampleRate/1000.0f, 0, 'f', 2));
@@ -174,7 +180,6 @@ void ATVDemodGUI::applyTVSampleRate()
     displayRFBandwidths();
     lineTimeUpdate();
     topTimeUpdate();
-    blockApplySettings(false);
 }
 
 bool ATVDemodGUI::handleMessage(const Message& message)
@@ -231,7 +236,7 @@ ATVDemodGUI::ATVDemodGUI(PluginAPI* objPluginAPI, DeviceUISet *deviceUISet, Base
         m_pluginAPI(objPluginAPI),
         m_deviceUISet(deviceUISet),
         m_channelMarker(this),
-        m_blnDoApplySettings(true),
+        m_doApplySettings(false),
         m_intTickCount(0),
         m_basebandSampleRate(48000),
         m_tvSampleRate(48000)
@@ -252,7 +257,7 @@ ATVDemodGUI::ATVDemodGUI(PluginAPI* objPluginAPI, DeviceUISet *deviceUISet, Base
 
     ui->deltaFrequencyLabel->setText(QString("%1f").arg(QChar(0x94, 0x03)));
     ui->deltaFrequency->setColorMapper(ColorMapper(ColorMapper::GrayGold));
-    ui->deltaFrequency->setValueRange(false, 7, -9999999, 9999999);
+    ui->deltaFrequency->setValueRange(false, 8, -99999999, 99999999);
 
     m_channelMarker.blockSignals(true);
     m_channelMarker.setColor(Qt::white);
@@ -302,14 +307,11 @@ ATVDemodGUI::~ATVDemodGUI()
     delete ui;
 }
 
-void ATVDemodGUI::blockApplySettings(bool blnBlock)
-{
-    m_blnDoApplySettings = !blnBlock;
-}
-
 void ATVDemodGUI::applySettings(bool force)
 {
-    if (m_blnDoApplySettings)
+    qDebug() << "ATVDemodGUI::applySettings: " << force << " m_doApplySettings: " << m_doApplySettings;
+
+    if (m_doApplySettings)
     {
 		ATVDemod::MsgConfigureATVDemod *msg = ATVDemod::MsgConfigureATVDemod::create(m_settings, force);
 		m_atvDemod->getInputMessageQueue()->push(msg);
@@ -318,8 +320,12 @@ void ATVDemodGUI::applySettings(bool force)
 
 void ATVDemodGUI::setChannelMarkerBandwidth()
 {
-    m_blnDoApplySettings = false; // avoid infinite recursion
+    // avoid infinite recursion
     m_channelMarker.blockSignals(true);
+    ui->rfFiltering->blockSignals(true);
+    ui->rfBW->blockSignals(true);
+    ui->rfOppBW->blockSignals(true);
+    ui->modulation->blockSignals(true);
 
     if (ui->rfFiltering->isChecked()) // FFT filter
     {
@@ -347,7 +353,11 @@ void ATVDemodGUI::setChannelMarkerBandwidth()
 
     m_channelMarker.blockSignals(false);
     m_channelMarker.emitChangedByAPI();
-    m_blnDoApplySettings = true;
+
+    ui->rfFiltering->blockSignals(false);
+    ui->rfBW->blockSignals(false);
+    ui->rfOppBW->blockSignals(false);
+    ui->modulation->blockSignals(false);
 }
 
 void ATVDemodGUI::setRFFiltersSlidersRange(int sampleRate)
@@ -436,7 +446,7 @@ void ATVDemodGUI::on_lineTime_valueChanged(int value)
 
 void ATVDemodGUI::on_topTime_valueChanged(int value)
 {
-	ui->topTime->setToolTip(QString("Horizontal sync pulse length adjustment (%1)").arg(value));
+	ui->topTime->setToolTip(QString("Horizontal sync pulse length adjustment (%1 %)").arg(value));
     m_settings.m_topTimeFactor = value;
     topTimeUpdate();
     applySettings();
@@ -552,6 +562,22 @@ void ATVDemodGUI::on_fmDeviation_valueChanged(int value)
     applySettings();
 }
 
+void ATVDemodGUI::on_amScaleFactor_valueChanged(int value)
+{
+    ui->amScaleFactor->setValue(m_settings.m_amScalingFactor);
+    ui->amScaleFactorText->setText(QString("%1").arg(m_settings.m_amScalingFactor));
+    m_settings.m_amScalingFactor = value;
+    applySettings();
+}
+
+void ATVDemodGUI::on_amScaleOffset_valueChanged(int value)
+{
+    ui->amScaleOffset->setValue(m_settings.m_amOffsetFactor);
+    ui->amScaleOffsetText->setText(QString("%1").arg(m_settings.m_amOffsetFactor));
+    m_settings.m_amOffsetFactor = value;
+    applySettings();
+}
+
 void ATVDemodGUI::on_screenTabWidget_currentChanged(int index)
 {
     m_atvDemod->setVideoTabIndex(index);
@@ -585,15 +611,7 @@ void ATVDemodGUI::lineTimeUpdate()
 void ATVDemodGUI::topTimeUpdate()
 {
     float nominalTopTime = ATVDemodSettings::getNominalLineTime(m_settings.m_nbLines, m_settings.m_fps) * (4.7f / 64.0f);
-    int topTimeScaleFactor = (int) std::log10(nominalTopTime);
-
-    if (m_tvSampleRate == 0) {
-        m_fltTopTimeMultiplier = std::pow(10.0, topTimeScaleFactor-3);
-    } else {
-        m_fltTopTimeMultiplier = 1.0f / m_tvSampleRate;
-    }
-
-    float topTime = nominalTopTime + m_fltTopTimeMultiplier * ui->topTime->value();
+    float topTime = nominalTopTime * (ui->topTime->value() / 100.0f);
 
     if (topTime < 0.0)
         ui->topTimeText->setText("invalid");

@@ -1,5 +1,5 @@
 ///////////////////////////////////////////////////////////////////////////////////
-// Copyright (C) 2017 Edouard Griffiths, F4EXB                                   //
+// Copyright (C) 2016 Edouard Griffiths, F4EXB                                   //
 //                                                                               //
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
@@ -15,75 +15,65 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.          //
 ///////////////////////////////////////////////////////////////////////////////////
 
-#ifndef INCLUDE_REMOTEOUTPUTTHREAD_H
-#define INCLUDE_REMOTEOUTPUTTHREAD_H
+#ifndef INCLUDE_FILESINKWORKER_H
+#define INCLUDE_FILESINKWORKER_H
 
+#include <QObject>
+#include <QTimer>
+#include <QElapsedTimer>
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
 #include <stdint.h>
 
-#include <QThread>
-#include <QMutex>
-#include <QWaitCondition>
-#include <QTimer>
-#include <QElapsedTimer>
-
 #include "dsp/inthalfbandfilter.h"
 #include "dsp/interpolators.h"
 
-#include "udpsinkfec.h"
-
-#define REMOTEOUTPUT_THROTTLE_MS 50
+#define FILESINK_THROTTLE_MS 50
 
 class SampleSourceFifo;
-struct timeval;
 
-class RemoteOutputThread : public QThread {
+class FileSinkWorker : public QObject {
 	Q_OBJECT
 
 public:
-	RemoteOutputThread(SampleSourceFifo* sampleFifo, QObject* parent = 0);
-	~RemoteOutputThread();
+	FileSinkWorker(std::ofstream *samplesStream, SampleSourceFifo* sampleFifo, QObject* parent = 0);
+	~FileSinkWorker();
 
 	void startWork();
 	void stopWork();
-
 	void setSamplerate(int samplerate);
-    void setNbBlocksFEC(uint32_t nbBlocksFEC) { m_udpSinkFEC.setNbBlocksFEC(nbBlocksFEC); };
-    void setTxDelay(float txDelay) { m_udpSinkFEC.setTxDelay(txDelay); };
-    void setDataAddress(const QString& address, uint16_t port) { m_udpSinkFEC.setRemoteAddress(address, port); }
-
-    bool isRunning() const { return m_running; }
-
-    uint32_t getSamplesCount(uint64_t& ts_usecs) const;
+	void setLog2Interpolation(int log2Interpolation);
+    void setBuffer(std::size_t chunksize);
+	bool isRunning() const { return m_running; }
+    std::size_t getSamplesCount() const { return m_samplesCount; }
     void setSamplesCount(int samplesCount) { m_samplesCount = samplesCount; }
-    void setChunkCorrection(int chunkCorrection) { m_chunkCorrection = chunkCorrection; }
 
 	void connectTimer(const QTimer& timer);
 
 private:
-	QMutex m_startWaitMutex;
-	QWaitCondition m_startWaiter;
 	volatile bool m_running;
 
-	int m_samplesChunkSize;
+	std::ofstream* m_ofstream;
+	std::size_t m_bufsize;
+	unsigned int m_samplesChunkSize;
 	SampleSourceFifo* m_sampleFifo;
-    uint32_t m_samplesCount;
-    int m_chunkCorrection;
+    std::size_t m_samplesCount;
 
 	int m_samplerate;
+	int m_log2Interpolation;
     int m_throttlems;
     int m_maxThrottlems;
     QElapsedTimer m_elapsedTimer;
     bool m_throttleToggle;
 
-    UDPSinkFEC m_udpSinkFEC;
+    Interpolators<qint16, SDR_TX_SAMP_SZ, 16> m_interpolators;
+    int16_t *m_buf;
 
-	void run();
+	void callbackPart(SampleVector& data, unsigned int iBegin, unsigned int iEnd);
 
 private slots:
 	void tick();
 };
 
-#endif // INCLUDE_REMOTEOUTPUTTHREAD_H
+#endif // INCLUDE_FILESINKWORKER_H

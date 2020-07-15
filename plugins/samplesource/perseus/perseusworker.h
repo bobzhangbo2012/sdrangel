@@ -15,54 +15,50 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.          //
 ///////////////////////////////////////////////////////////////////////////////////
 
-#ifndef INCLUDE_AIRSPYHFTHREAD_H
-#define INCLUDE_AIRSPYHFTHREAD_H
+#ifndef PLUGINS_SAMPLESOURCE_PERSEUS_PERSEUSWORKER_H_
+#define PLUGINS_SAMPLESOURCE_PERSEUS_PERSEUSWORKER_H_
 
-#include <dsp/decimatorsfi.h>
-#include <QThread>
-#include <QMutex>
-#include <QWaitCondition>
-#include <libairspyhf/airspyhf.h>
+#include <QObject>
+#include "perseus-sdr.h"
 
 #include "dsp/samplesinkfifo.h"
+#include "dsp/decimators.h"
 
-#define AIRSPYHF_BLOCKSIZE (1<<17)
+#define PERSEUS_NBSAMPLES 2048   // Number of I/Q samples in each callback from Perseus
+#define PERSEUS_BLOCKSIZE 6*PERSEUS_NBSAMPLES // Perseus sends 2*3 bytes samples
 
-class AirspyHFThread : public QThread {
+class PerseusWorker : public QObject {
 	Q_OBJECT
 
 public:
-	AirspyHFThread(airspyhf_device_t* dev, SampleSinkFifo* sampleFifo, QObject* parent = 0);
-	~AirspyHFThread();
+	PerseusWorker(perseus_descr* dev, SampleSinkFifo* sampleFifo, QObject* parent = 0);
+	~PerseusWorker();
 
 	void startWork();
 	void stopWork();
-	void setSamplerate(uint32_t samplerate);
 	void setLog2Decimation(unsigned int log2_decim);
     void setIQOrder(bool iqOrder) { m_iqOrder = iqOrder; }
 
 private:
-	QMutex m_startWaitMutex;
-	QWaitCondition m_startWaiter;
-	bool m_running;
+	volatile bool m_running;
 
-	airspyhf_device_t* m_dev;
-	qint16 m_buf[2*AIRSPYHF_BLOCKSIZE];
+	perseus_descr* m_dev;
+	qint32 m_buf[2*PERSEUS_NBSAMPLES];
 	SampleVector m_convertBuffer;
 	SampleSinkFifo* m_sampleFifo;
 
-	int m_samplerate;
 	unsigned int m_log2Decim;
     bool m_iqOrder;
-	static AirspyHFThread *m_this;
+	static PerseusWorker *m_this;
 
-	DecimatorsFI<true> m_decimatorsIQ;
-	DecimatorsFI<false> m_decimatorsQI;
+	Decimators<qint32, TripleByteLE<qint32>, SDR_RX_SAMP_SZ, 24, true> m_decimators32IQ; // for no decimation (accumulator is int32)
+    Decimators<qint32, TripleByteLE<qint64>, SDR_RX_SAMP_SZ, 24, true> m_decimators64IQ; // for actual decimation (accumulator is int64)
+	Decimators<qint32, TripleByteLE<qint32>, SDR_RX_SAMP_SZ, 24, false> m_decimators32QI; // for no decimation (accumulator is int32)
+    Decimators<qint32, TripleByteLE<qint64>, SDR_RX_SAMP_SZ, 24, false> m_decimators64QI; // for actual decimation (accumulator is int64)
 
-	void run();
-	void callbackIQ(const float* buf, qint32 len);
-	void callbackQI(const float* buf, qint32 len);
-	static int rx_callback(airspyhf_transfer_t* transfer);
+	void callbackIQ(const uint8_t* buf, qint32 len); // inner call back
+    void callbackQI(const uint8_t* buf, qint32 len);
+	static int rx_callback(void *buf, int buf_size, void *extra); // call back from Perseus
 };
 
-#endif // INCLUDE_AIRSPYHFTHREAD_H
+#endif /* PLUGINS_SAMPLESOURCE_PERSEUS_PERSEUSWORKER_H_ */

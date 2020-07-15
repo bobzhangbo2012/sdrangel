@@ -103,17 +103,25 @@ Using this button you can adjust the nominal FM deviation as a percentage of the
 
 &#9758; The value is accurate only with the atan2 differential demodulator i.e. FM3. With FM1 and FM2 you will have to adjust it for best image results. You can use the scope as an aid to try to fit the video signal in the 0/1 range.
 
-<h3>11: FFT asymmetrical filter toggle</h3>
+<h3>11: AM signal range correction factor</h3>
+
+This is a factor in % applied to the detected AM signal range. Because of possible overshoots the detected range may be artificially reduced from the original causing possible errors on the different detection lavels on the video signal. This control lets you correct this. Watch the video signal in the scope tab for fine tuning. It affects only AM signals.
+
+<h3>12: AM signal range offset correction factor</h3>
+
+This is a factor in % applied to the signal resulting from the previous correction and that shifts its relative position. Using this control you can position the video signal correctly so that the black level is around 0.3V. Again watch the video signal in the scope tab for fine tuning. It affects only AM signals.
+
+<h3>13: FFT asymmetrical filter toggle</h3>
 
 Use this button to enable/disable the FFT asymmetrical filter. Use this filter when you want to optimize the reception of vestigial sideband AM signals.
 
-<h3>12: FFT asymmetrical filter opposite band cutoff frequency</h3>
+<h3>14: FFT asymmetrical filter opposite band cutoff frequency</h3>
 
 For all modulations except LSB this is the lower side band.
 
 This slider lets you adjust the opposite band cutoff frequency of the FFT asymmetrical filter. The value in kHz appears on the left of the slider.
 
-<h3>13: FFT asymmetrical filter in band cutoff frequency</h3>
+<h3>15: FFT asymmetrical filter in band cutoff frequency</h3>
 
 For all modulations except LSB this is the upper side band.
 
@@ -265,9 +273,9 @@ The slider step is set to a sample period in order to ensure that the adjustment
 
 This is the length in time units of a horizontal or line synchronization pulse. The value appears on the right of the slider. Nominal value depends on the nominal line length as described above. The nominal pulse length is derived from the 4.7 &mu;s pulse of a 625 lines standard system with a 64 &mu;s line length. For example with a 405 lines &#215; 20 FPS transmission that has a line length of &#8776;123.45 &mu;s this is (4.7 / 64) &#215; 123.45 &#8776; 9.07 &mu;s. In practice you will adjust it to a slightly smaller value to be able to synchronize.
 
-Similarly to the line length slider the slider step is set to a sample period in order to ensure that the adjustment is done with the best possible precision. The middle position of the slider sets the nominal value and the slider step appears in the tooltip.
+The slider sets a percentage if the nominal pulse length value as described above from 1 to 100%. Therefore it is always shorter than nominal. The ideal position is usually at 25~30% but you have to try the bet value for your own signal.
 
-&#9758; You can move this control back and forth in case you have synchronizing issues as it can help the synchronization system to get back into pace. In practice the value should always be negative (shorter pulse than nominal).
+This percentage appears in the tooltip.
 
 <h2>C: Image</h2>
 

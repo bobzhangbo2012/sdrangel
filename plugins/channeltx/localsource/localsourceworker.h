@@ -15,68 +15,42 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.          //
 ///////////////////////////////////////////////////////////////////////////////////
 
-#ifndef PLUGINS_CHANNELRX_LOCALSINK_LOCALSINKTHREAD_H_
-#define PLUGINS_CHANNELRX_LOCALSINK_LOCALSINKTHREAD_H_
+#ifndef PLUGINS_CHANNELTX_LOCALSOURCE_LOCALOURCEWORKER_H_
+#define PLUGINS_CHANNELTX_LOCALSOURCE_LOCALOURCEWORKER_H_
 
-#include <QThread>
-#include <QMutex>
-#include <QWaitCondition>
+#include <QObject>
 
 #include "dsp/dsptypes.h"
 #include "util/message.h"
 #include "util/messagequeue.h"
 
-class SampleSinkFifo;
+class SampleSourceFifo;
 
-class LocalSinkThread : public QThread {
+class LocalSourceWorker : public QObject {
     Q_OBJECT
 
 public:
-    class MsgStartStop : public Message {
-        MESSAGE_CLASS_DECLARATION
-
-    public:
-        bool getStartStop() const { return m_startStop; }
-
-        static MsgStartStop* create(bool startStop) {
-            return new MsgStartStop(startStop);
-        }
-
-    protected:
-        bool m_startStop;
-
-        MsgStartStop(bool startStop) :
-            Message(),
-            m_startStop(startStop)
-        { }
-    };
-
-    LocalSinkThread(QObject* parent = 0);
-    ~LocalSinkThread();
-
-    void startStop(bool start);
-    void setSampleFifo(SampleSinkFifo *sampleFifo) { m_sampleFifo = sampleFifo; }
-    void setDeviceSampleFifo(SampleSinkFifo *sampleFifo) { m_deviceSampleFifo  = sampleFifo; }
-
-public slots:
-    void handleData(); //!< Handle data when samples have to be processed
-
-private:
-	QMutex m_startWaitMutex;
-	QWaitCondition m_startWaiter;
-	volatile bool m_running;
-    SampleSinkFifo *m_sampleFifo;
-    SampleSinkFifo *m_deviceSampleFifo;
-
-    MessageQueue m_inputMessageQueue;
+    LocalSourceWorker(QObject* parent = nullptr);
+    ~LocalSourceWorker();
 
     void startWork();
     void stopWork();
-    void run();
+    void setSampleFifo(SampleSourceFifo *sampleFifo);
+
+public slots:
+    void pullSamples(unsigned int count);
+
+signals:
+    void samplesAvailable(unsigned int iPart1Begin, unsigned int iPart1End, unsigned int iPart2Begin, unsigned int iPart2End);
+
+private:
+	volatile bool m_running;
+    SampleSourceFifo *m_sampleFifo;
+    MessageQueue m_inputMessageQueue;
 
 private slots:
     void handleInputMessages();
 };
 
-#endif // PLUGINS_CHANNELRX_LOCALSINK_LOCALSINKTHREAD_H_
+#endif // PLUGINS_CHANNELTX_LOCALSOURCE_LOCALOURCEWORKER_H_
 

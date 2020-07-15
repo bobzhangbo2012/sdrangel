@@ -63,6 +63,25 @@ public:
         { }
     };
 
+    class SDRBASE_API MsgStartStop : public Message {
+        MESSAGE_CLASS_DECLARATION
+
+    public:
+        bool getStartStop() const { return m_startStop; }
+
+        static MsgStartStop* create(bool startStop) {
+            return new MsgStartStop(startStop);
+        }
+
+    protected:
+        bool m_startStop;
+
+        MsgStartStop(bool startStop) :
+            Message(),
+            m_startStop(startStop)
+        { }
+    };
+
     enum AvgMode
     {
         AvgModeNone,
@@ -150,6 +169,7 @@ private:
         uint16_t m_port;
     };
 
+    bool m_running;
 	FFTEngine* m_fft;
 	FFTWindow m_window;
     unsigned int m_fftEngineSequence;
@@ -179,6 +199,7 @@ private:
 
 	QMutex m_mutex;
 
+    void setRunning(bool running) { m_running = running; }
     void applySettings(const GLSpectrumSettings& settings, bool force = false);
     void handleConfigureDSP(uint64_t centerFrequency, int sampleRate);
     void handleScalef(Real scalef);

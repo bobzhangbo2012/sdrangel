@@ -1,5 +1,5 @@
 ///////////////////////////////////////////////////////////////////////////////////
-// Copyright (C) 2016 Edouard Griffiths, F4EXB                                   //
+// Copyright (C) 2019 Edouard Griffiths, F4EXB                                   //
 //                                                                               //
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
@@ -15,12 +15,10 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.          //
 ///////////////////////////////////////////////////////////////////////////////////
 
-#ifndef INCLUDE_FILESINKTHREAD_H
-#define INCLUDE_FILESINKTHREAD_H
+#ifndef INCLUDE_TESTSINKWORKER_H
+#define INCLUDE_TESTSINKWORKER_H
 
-#include <QThread>
-#include <QMutex>
-#include <QWaitCondition>
+#include <QObject>
 #include <QTimer>
 #include <QElapsedTimer>
 #include <iostream>
@@ -30,17 +28,19 @@
 
 #include "dsp/inthalfbandfilter.h"
 #include "dsp/interpolators.h"
+#include "util/incrementalvector.h"
 
-#define FILESINK_THROTTLE_MS 50
+#define TESTSINK_THROTTLE_MS 50
 
 class SampleSourceFifo;
+class BasebandSampleSink;
 
-class FileSinkThread : public QThread {
+class TestSinkWorker : public QObject {
 	Q_OBJECT
 
 public:
-	FileSinkThread(std::ofstream *samplesStream, SampleSourceFifo* sampleFifo, QObject* parent = 0);
-	~FileSinkThread();
+	TestSinkWorker(SampleSourceFifo* sampleFifo, QObject* parent = nullptr);
+	~TestSinkWorker();
 
 	void startWork();
 	void stopWork();
@@ -50,15 +50,20 @@ public:
 	bool isRunning() const { return m_running; }
     std::size_t getSamplesCount() const { return m_samplesCount; }
     void setSamplesCount(int samplesCount) { m_samplesCount = samplesCount; }
+    void setSpectrumSink(BasebandSampleSink *spectrumSink) { m_spectrumSink = spectrumSink; }
 
 	void connectTimer(const QTimer& timer);
 
 private:
-	QMutex m_startWaitMutex;
-	QWaitCondition m_startWaiter;
+#pragma pack(push, 1)
+    struct Sample16
+    {
+        int16_t m_real;
+        int16_t m_imag;
+    };
+#pragma pack(pop)
 	volatile bool m_running;
 
-	std::ofstream* m_ofstream;
 	std::size_t m_bufsize;
 	unsigned int m_samplesChunkSize;
 	SampleSourceFifo* m_sampleFifo;
@@ -73,12 +78,14 @@ private:
 
     Interpolators<qint16, SDR_TX_SAMP_SZ, 16> m_interpolators;
     int16_t *m_buf;
+    BasebandSampleSink* m_spectrumSink;
+    IncrementalVector<Sample> m_samplesVector;
 
-	void run();
-	void callbackPart(SampleVector& data, unsigned int iBegin, unsigned int iEnd);
+    void callbackPart(SampleVector& data, unsigned int iBegin, unsigned int iEnd);
+    void feedSpectrum(int16_t *buf, unsigned int bufSize);
 
 private slots:
 	void tick();
 };
 
-#endif // INCLUDE_FILESINKTHREAD_H
+#endif // INCLUDE_TESTSINKWORKER_H

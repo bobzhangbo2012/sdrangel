@@ -1,5 +1,5 @@
 ///////////////////////////////////////////////////////////////////////////////////
-// Copyright (C) 2019 Edouard Griffiths, F4EXB                                   //
+// Copyright (C) 2017 Edouard Griffiths, F4EXB                                   //
 //                                                                               //
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
@@ -15,82 +15,69 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.          //
 ///////////////////////////////////////////////////////////////////////////////////
 
-#ifndef INCLUDE_TESTSINKTHREAD_H
-#define INCLUDE_TESTSINKTHREAD_H
+#ifndef INCLUDE_REMOTEOUTPUTWORKER_H
+#define INCLUDE_REMOTEOUTPUTWORKER_H
 
-#include <QThread>
-#include <QMutex>
-#include <QWaitCondition>
-#include <QTimer>
-#include <QElapsedTimer>
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
 #include <stdint.h>
 
+#include <QObject>
+#include <QTimer>
+#include <QElapsedTimer>
+
 #include "dsp/inthalfbandfilter.h"
 #include "dsp/interpolators.h"
-#include "util/incrementalvector.h"
 
-#define TESTSINK_THROTTLE_MS 50
+#include "udpsinkfec.h"
+
+#define REMOTEOUTPUT_THROTTLE_MS 50
 
 class SampleSourceFifo;
-class BasebandSampleSink;
+struct timeval;
 
-class TestSinkThread : public QThread {
+class RemoteOutputWorker : public QObject {
 	Q_OBJECT
 
 public:
-	TestSinkThread(SampleSourceFifo* sampleFifo, QObject* parent = nullptr);
-	~TestSinkThread();
+	RemoteOutputWorker(SampleSourceFifo* sampleFifo, QObject* parent = 0);
+	~RemoteOutputWorker();
 
 	void startWork();
 	void stopWork();
+
 	void setSamplerate(int samplerate);
-	void setLog2Interpolation(int log2Interpolation);
-    void setBuffer(std::size_t chunksize);
-	bool isRunning() const { return m_running; }
-    std::size_t getSamplesCount() const { return m_samplesCount; }
+    void setNbBlocksFEC(uint32_t nbBlocksFEC) { m_udpSinkFEC.setNbBlocksFEC(nbBlocksFEC); };
+    void setTxDelay(float txDelay) { m_udpSinkFEC.setTxDelay(txDelay); };
+    void setDataAddress(const QString& address, uint16_t port) { m_udpSinkFEC.setRemoteAddress(address, port); }
+
+    bool isRunning() const { return m_running; }
+
+    uint32_t getSamplesCount(uint64_t& ts_usecs) const;
     void setSamplesCount(int samplesCount) { m_samplesCount = samplesCount; }
-    void setSpectrumSink(BasebandSampleSink *spectrumSink) { m_spectrumSink = spectrumSink; }
+    void setChunkCorrection(int chunkCorrection) { m_chunkCorrection = chunkCorrection; }
 
 	void connectTimer(const QTimer& timer);
 
 private:
-#pragma pack(push, 1)
-    struct Sample16
-    {
-        int16_t m_real;
-        int16_t m_imag;
-    };
-#pragma pack(pop)
-	QMutex m_startWaitMutex;
-	QWaitCondition m_startWaiter;
 	volatile bool m_running;
 
-	std::size_t m_bufsize;
-	unsigned int m_samplesChunkSize;
+	int m_samplesChunkSize;
 	SampleSourceFifo* m_sampleFifo;
-    std::size_t m_samplesCount;
+    uint32_t m_samplesCount;
+    int m_chunkCorrection;
 
 	int m_samplerate;
-	int m_log2Interpolation;
     int m_throttlems;
     int m_maxThrottlems;
     QElapsedTimer m_elapsedTimer;
     bool m_throttleToggle;
 
-    Interpolators<qint16, SDR_TX_SAMP_SZ, 16> m_interpolators;
-    int16_t *m_buf;
-    BasebandSampleSink* m_spectrumSink;
-    IncrementalVector<Sample> m_samplesVector;
-
-	void run();
-    void callbackPart(SampleVector& data, unsigned int iBegin, unsigned int iEnd);
-    void feedSpectrum(int16_t *buf, unsigned int bufSize);
+    UDPSinkFEC m_udpSinkFEC;
 
 private slots:
 	void tick();
 };
 
-#endif // INCLUDE_TESTSINKTHREAD_H
+#endif // INCLUDE_REMOTEOUTPUTTHREAD_H

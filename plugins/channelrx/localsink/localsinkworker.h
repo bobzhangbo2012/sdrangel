@@ -1,5 +1,5 @@
 ///////////////////////////////////////////////////////////////////////////////////
-// Copyright (C) 2018-2019 Edouard Griffiths, F4EXB                              //
+// Copyright (C) 2019 Edouard Griffiths, F4EXB.                                  //
 //                                                                               //
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
@@ -15,23 +15,22 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.          //
 ///////////////////////////////////////////////////////////////////////////////////
 
-#ifndef PLUGINS_CHANNELTX_REMOTESRC_REMOTESRCTHREAD_H_
-#define PLUGINS_CHANNELTX_REMOTESRC_REMOTESRCTHREAD_H_
+#ifndef PLUGINS_CHANNELRX_LOCALSINK_LOCALSINKWORKER_H_
+#define PLUGINS_CHANNELRX_LOCALSINK_LOCALSINKWORKER_H_
 
-#include <QThread>
+#include <QObject>
 #include <QMutex>
 #include <QWaitCondition>
-#include <QHostAddress>
 
+#include "dsp/dsptypes.h"
 #include "util/message.h"
 #include "util/messagequeue.h"
 
-class RemoteDataQueue;
-class RemoteDataBlock;
-class QUdpSocket;
+class SampleSinkFifo;
 
-class RemoteSourceThread : public QThread {
+class LocalSinkWorker : public QObject {
     Q_OBJECT
+
 public:
     class MsgStartStop : public Message {
         MESSAGE_CLASS_DECLARATION
@@ -52,59 +51,28 @@ public:
         { }
     };
 
-    class MsgDataBind : public Message {
-        MESSAGE_CLASS_DECLARATION
-
-    public:
-        QHostAddress getAddress() const { return m_address; }
-        uint16_t getPort() const { return m_port; }
-
-        static MsgDataBind* create(const QString& address, uint16_t port) {
-            return new MsgDataBind(address, port);
-        }
-
-    protected:
-        QHostAddress m_address;
-        uint16_t m_port;
-
-        MsgDataBind(const QString& address, uint16_t port) :
-            Message(),
-            m_port(port)
-        {
-            m_address.setAddress(address);
-        }
-    };
-
-    RemoteSourceThread(RemoteDataQueue *dataQueue, QObject* parent = 0);
-    ~RemoteSourceThread();
+    LocalSinkWorker(QObject* parent = 0);
+    ~LocalSinkWorker();
 
     void startStop(bool start);
-    void dataBind(const QString& address, uint16_t port);
+    void setSampleFifo(SampleSinkFifo *sampleFifo) { m_sampleFifo = sampleFifo; }
+    void setDeviceSampleFifo(SampleSinkFifo *sampleFifo) { m_deviceSampleFifo  = sampleFifo; }
+
+public slots:
+    void handleData(); //!< Handle data when samples have to be processed
 
 private:
-    QMutex m_startWaitMutex;
-    QWaitCondition m_startWaiter;
-    volatile bool m_running;
-
+	volatile bool m_running;
+    SampleSinkFifo *m_sampleFifo;
+    SampleSinkFifo *m_deviceSampleFifo;
     MessageQueue m_inputMessageQueue;
-    RemoteDataQueue *m_dataQueue;
 
-    QHostAddress m_address;
-    QUdpSocket *m_socket;
-
-    static const uint32_t m_nbDataBlocks = 4;          //!< number of data blocks in the ring buffer
-    RemoteDataBlock *m_dataBlocks[m_nbDataBlocks];  //!< ring buffer of data blocks indexed by frame affinity
-
-    void startWork();
-    void stopWork();
-
-    void run();
+	void startWork();
+	void stopWork();
 
 private slots:
     void handleInputMessages();
-    void readPendingDatagrams();
 };
 
+#endif // PLUGINS_CHANNELRX_LOCALSINK_LOCALSINKWORKER_H_
 
-
-#endif /* PLUGINS_CHANNELTX_REMOTESRC_REMOTESRCTHREAD_H_ */

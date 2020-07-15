@@ -1,5 +1,5 @@
 ///////////////////////////////////////////////////////////////////////////////////
-// Copyright (C) 2019 Edouard Griffiths, F4EXB.                                  //
+// Copyright (C) 2018-2020 Edouard Griffiths, F4EXB                              //
 //                                                                               //
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
@@ -15,69 +15,69 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.          //
 ///////////////////////////////////////////////////////////////////////////////////
 
-#ifndef PLUGINS_CHANNELTX_LOCALOURCE_LOCALOURCETHREAD_H_
-#define PLUGINS_CHANNELTX_LOCALOURCE_LOCALOURCETHREAD_H_
+#ifndef PLUGINS_CHANNELTX_REMOTESRC_REMOTESRCWORKER_H_
+#define PLUGINS_CHANNELTX_REMOTESRC_REMOTESRCWORKER_H_
 
-#include <QThread>
-#include <QMutex>
-#include <QWaitCondition>
+#include <QObject>
+#include <QHostAddress>
 
-#include "dsp/dsptypes.h"
 #include "util/message.h"
 #include "util/messagequeue.h"
 
-class SampleSourceFifo;
+class RemoteDataQueue;
+class RemoteDataBlock;
+class QUdpSocket;
 
-class LocalSourceThread : public QThread {
+class RemoteSourceWorker : public QObject {
     Q_OBJECT
-
 public:
-    class MsgStartStop : public Message {
+    class MsgDataBind : public Message {
         MESSAGE_CLASS_DECLARATION
 
     public:
-        bool getStartStop() const { return m_startStop; }
+        QHostAddress getAddress() const { return m_address; }
+        uint16_t getPort() const { return m_port; }
 
-        static MsgStartStop* create(bool startStop) {
-            return new MsgStartStop(startStop);
+        static MsgDataBind* create(const QString& address, uint16_t port) {
+            return new MsgDataBind(address, port);
         }
 
     protected:
-        bool m_startStop;
+        QHostAddress m_address;
+        uint16_t m_port;
 
-        MsgStartStop(bool startStop) :
+        MsgDataBind(const QString& address, uint16_t port) :
             Message(),
-            m_startStop(startStop)
-        { }
+            m_port(port)
+        {
+            m_address.setAddress(address);
+        }
     };
 
-    LocalSourceThread(QObject* parent = nullptr);
-    ~LocalSourceThread();
-
-    void startStop(bool start);
-    void setSampleFifo(SampleSourceFifo *sampleFifo);
-
-public slots:
-    void pullSamples(unsigned int count);
-
-signals:
-    void samplesAvailable(unsigned int iPart1Begin, unsigned int iPart1End, unsigned int iPart2Begin, unsigned int iPart2End);
-
-private:
-	QMutex m_startWaitMutex;
-	QWaitCondition m_startWaiter;
-	volatile bool m_running;
-    SampleSourceFifo *m_sampleFifo;
-
-    MessageQueue m_inputMessageQueue;
+    RemoteSourceWorker(RemoteDataQueue *dataQueue, QObject* parent = 0);
+    ~RemoteSourceWorker();
 
     void startWork();
     void stopWork();
-    void run();
+    void dataBind(const QString& address, uint16_t port);
+
+private:
+    volatile bool m_running;
+
+    MessageQueue m_inputMessageQueue;
+    RemoteDataQueue *m_dataQueue;
+
+    QHostAddress m_address;
+    QUdpSocket *m_socket;
+
+    static const uint32_t m_nbDataBlocks = 4;          //!< number of data blocks in the ring buffer
+    RemoteDataBlock *m_dataBlocks[m_nbDataBlocks];  //!< ring buffer of data blocks indexed by frame affinity
 
 private slots:
     void handleInputMessages();
+    void readPendingDatagrams();
 };
 
-#endif // PLUGINS_CHANNELTX_LOCALSINK_LOCALSINKTHREAD_H_
 
+
+#endif /* PLUGINS_CHANNELTX_REMOTESRC_REMOTESRCWORKER_H_ */

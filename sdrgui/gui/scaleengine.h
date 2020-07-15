@@ -36,6 +36,28 @@ public:
 	};
 	typedef QList<Tick> TickList;
 
+	ScaleEngine();
+
+	void setOrientation(Qt::Orientation orientation);
+	void setFont(const QFont& font);
+	void setSize(float size);
+	float getSize() { return m_size; }
+	void setRange(Unit::Physical physicalUnit, float rangeMin, float rangeMax);
+    float getRange() const { return m_rangeMax - m_rangeMin; }
+    float getRangeMin() const { return m_rangeMin; }
+    float getRangeMax() const { return m_rangeMax; }
+	void setMakeOpposite(bool makeOpposite) { m_makeOpposite = makeOpposite; }
+	void setFixedDecimalPlaces(int decimalPlaces) { m_fixedDecimalPlaces =decimalPlaces; }
+
+	float getPosFromValue(double value);
+	float getValueFromPos(double pos);
+	const TickList& getTickList();
+
+	QString getRangeMinStr();
+	QString getRangeMaxStr();
+
+	float getScaleWidth();
+
 private:
 	// base configuration
 	Qt::Orientation m_orientation;
@@ -70,26 +92,6 @@ private:
 
 	double majorTickValue(int tick);
 	double minorTickValue(int tick);
-
-public:
-	ScaleEngine();
-
-	void setOrientation(Qt::Orientation orientation);
-	void setFont(const QFont& font);
-	void setSize(float size);
-	float getSize() { return m_size; }
-	void setRange(Unit::Physical physicalUnit, float rangeMin, float rangeMax);
-	void setMakeOpposite(bool makeOpposite) { m_makeOpposite = makeOpposite; }
-	void setFixedDecimalPlaces(int decimalPlaces) { m_fixedDecimalPlaces =decimalPlaces; }
-
-	float getPosFromValue(double value);
-	float getValueFromPos(double pos);
-	const TickList& getTickList();
-
-	QString getRangeMinStr();
-	QString getRangeMaxStr();
-
-	float getScaleWidth();
 };
 
 #endif // INCLUDE_SCALEENGINE_H

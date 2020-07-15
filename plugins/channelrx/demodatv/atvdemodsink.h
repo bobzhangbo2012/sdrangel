@@ -45,7 +45,7 @@ public:
 
   	void setScopeSink(BasebandSampleSink* scopeSink) { m_scopeSink = scopeSink; }
     void setTVScreen(TVScreen *tvScreen) { m_registeredTVScreen = tvScreen; } //!< set by the GUI
-    double getMagSq() const { return m_objMagSqAverage; } //!< Beware this is scaled to 2^30
+    double getMagSq() const { return m_magSqAverage; } //!< Beware this is scaled to 2^30
     bool getBFOLocked();
     void setVideoTabIndex(int videoTabIndex) { m_videoTabIndex = videoTabIndex; }
 
@@ -128,7 +128,6 @@ private:
     int m_imageIndex;
     int m_synchroSamples;
 
-    bool m_horizontalSynchroDetected;
     bool m_verticalSynchroDetected;
 
     float m_ampLineSum;
@@ -140,14 +139,13 @@ private:
     float m_ampMin;
     float m_ampMax;
     float m_ampDelta; //!< calculated amplitude of HSync pulse (should be ~0.3f)
-    float m_ampSample;
 
     float m_fltBufferI[6];
     float m_fltBufferQ[6];
 
     int m_colIndex;
     int m_sampleIndex;
-    unsigned int m_amSampleIndex;
+    int m_amSampleIndex;
     int m_rowIndex;
     int m_lineIndex;
 
@@ -158,7 +156,8 @@ private:
 
     //*************** RF  ***************
 
-    MovingAverageUtil<double, double, 32> m_objMagSqAverage;
+    MovingAverageUtil<double, double, 32> m_magSqAverage;
+    MovingAverageUtilVar<double, double> m_ampAverage;
 
     NCO m_nco;
     SimplePhaseLock m_bfoPLL;
@@ -194,13 +193,6 @@ private:
         // Floor Detection (0.1 nominal)
         if (sample < m_settings.m_levelSynchroTop)
         {
-            if (m_synchroSamples == 0) // AM scale reset on transition if within range
-            {
-                m_effMin = 2000000.0f;
-                m_effMax = -2000000.0f;
-                m_amSampleIndex = 0;
-            }
-
             m_synchroSamples++;
         }
         // Black detection (0.3 nominal)
@@ -208,22 +200,8 @@ private:
             m_synchroSamples = 0;
         }
 
-        // Refine AM scale estimation on HSync pulse sequence
-        if (m_amSampleIndex == (3*m_numberSamplesPerHTop)/2)
-        {
-            m_ampMin = m_effMin;
-            m_ampMax = m_effMax;
-            m_ampDelta = (m_ampMax - m_ampMin);
-
-            if (m_ampDelta <= 0.0) {
-                m_ampDelta = 0.3f;
-            }
-        }
-
         // H sync pulse
-        m_horizontalSynchroDetected = (m_synchroSamples == m_numberSamplesPerHTop);
-
-        if (m_horizontalSynchroDetected)
+        if (m_synchroSamples == m_numberSamplesPerHTop) // horizontal synchro detected
         {
             // Vertical sync and image rendering
             if ((m_sampleIndex >= (3*m_samplesPerLine) / 2) // Vertical sync is first horizontal sync after skip (count at least 1.5 line length)
@@ -275,7 +253,7 @@ private:
     {
         // Filling pixel on the current line - reference index 0 at start of sync pulse
         // remove only sync pulse empirically, +4 is to compensate shift due to hsync amortizing factor of 1/4
-        m_registeredTVScreen->setDataColor(m_colIndex - m_numberSamplesHSyncCrop, sampleVideo, sampleVideo, sampleVideo);
+        m_registeredTVScreen->setDataColor(m_colIndex - m_numberSamplesPerHSync + m_numberSamplesPerHTop, sampleVideo, sampleVideo, sampleVideo);
 
         int synchroTimeSamples = (3 * m_samplesPerLine) / 4; // count 3/4 line globally
         float synchroTrameLevel =  0.5f * ((float) synchroTimeSamples) * m_settings.m_levelBlack; // threshold is half the black value over 3/4th of line samples
@@ -285,13 +263,6 @@ private:
         // Floor Detection 0
         if (sample < m_settings.m_levelSynchroTop)
         {
-            if ((m_synchroSamples == 0) && (m_ampSample > 0.25f) && (m_ampSample < 0.35f)) // AM scale reset on transition
-            {
-                m_effMin = 2000000.0f;;
-                m_effMax = -2000000.0f;;
-                m_amSampleIndex = 0;
-            }
-
             m_synchroSamples++;
         }
         // Black detection 0.3
@@ -299,27 +270,11 @@ private:
             m_synchroSamples = 0;
         }
 
-        // Refine AM scale estimation on HSync pulse sequence
-        if ((m_amSampleIndex == (3*m_numberSamplesPerHTop)/2) && (sample > 0.25f) && (sample < 0.35f))
-        {
-            m_ampSample = sample;
-            m_ampMin = m_effMin;
-            m_ampMax = m_effMax;
-            m_ampDelta = (m_ampMax - m_ampMin);
-
-            if (m_ampDelta <= 0.0) {
-                m_ampDelta = 0.3f;
-            }
-        }
-
-        // H sync pulse
-        m_horizontalSynchroDetected = (m_synchroSamples == m_numberSamplesPerHTop) && (m_sampleIndex > (m_samplesPerLine/2) + m_numberSamplesPerLineSignals);
-
         //Horizontal Synchro processing
-
-        if (m_horizontalSynchroDetected)
+        if ((m_synchroSamples == m_numberSamplesPerHTop) // horizontal synchro detected
+         && (m_sampleIndex > (m_samplesPerLine/2) + m_numberSamplesPerLineSignals))
         {
-            m_avgColIndex = m_sampleIndex - m_colIndex - (m_colIndex < m_samplesPerLine/2 ? 150 : 0);
+            m_avgColIndex = m_sampleIndex - m_colIndex;
             //qDebug("HSync: %d %d %d", m_sampleIndex, m_colIndex, m_avgColIndex);
             m_sampleIndex = 0;
         }
